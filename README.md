@@ -29,6 +29,11 @@
 - [周复盘模板（完整版）](templates/weekly-review.md)：需要深入记录时使用。
 - [CHANGELOG](CHANGELOG.md)：关键学习节点和里程碑。
 
+## 本周入口
+
+- [本周学习 TODO](weekly-reviews/2026-W27-todo.md)：本周要完成什么、优先级是什么、完成标准是什么。
+- [本周进度和过程](weekly-reviews/2026-W27-progress.md)：记录每天推进、判断变化、卡点和下一步。
+
 ## 当前定位
 
 当前阶段的主线不是“能跑 vLLM”，而是把推理工作做到行业一流水平：
