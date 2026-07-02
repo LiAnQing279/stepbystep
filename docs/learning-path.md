@@ -55,6 +55,47 @@
 - 遇到性能热点，再下探到 FlashInfer、Triton、CUDA。
 - 遇到跨节点瓶颈，再看 NCCL、DeepEP、RDMA。
 
+### vLLM 源码入口指引
+
+```text
+请求入口：
+  vllm/entrypoints/openai/api_server.py
+    → AsyncLLMEngine.generate()
+
+核心引擎：
+  vllm/engine/async_llm_engine.py   # 异步引擎主循环
+  vllm/engine/llm_engine.py         # 同步引擎，核心逻辑
+
+调度器：
+  vllm/core/scheduler.py            # Scheduler.schedule() — 决定哪些请求进入本次 batch
+  vllm/core/block_manager.py        # KV Cache block 分配和释放
+
+Worker 执行：
+  vllm/worker/worker.py             # Worker.execute_model() — 单卡执行
+  vllm/executor/                    # 分布式执行器（TP/PP 的组织）
+
+关键链路：
+  add_request() → step() → schedule() → execute_model() → sample() → 返回 token
+```
+
+### SGLang 源码入口指引
+
+```text
+请求入口：
+  python/sglang/srt/server.py       # HTTP 服务入口
+
+核心调度：
+  python/sglang/srt/managers/scheduler.py         # 主调度循环
+  python/sglang/srt/managers/tp_worker.py         # TP Worker
+
+RadixAttention / KV Cache：
+  python/sglang/srt/layers/radix_attention.py     # RadixAttention 实现
+  python/sglang/srt/mem_cache/radix_cache.py      # 基于 Radix Tree 的 KV Cache 复用
+
+关键链路：
+  HTTP request → TokenizerManager → Scheduler → TpWorker → ModelRunner → 返回 token
+```
+
 每次源码阅读输出：
 
 - 一张调用链。
@@ -109,14 +150,14 @@
 
 示例：
 
-- 第 1 月：vLLM 请求生命周期和 Scheduler。
-- 第 2 月：KV Cache 管理和长上下文。
-- 第 3 月：SGLang Runtime 和结构化生成。
-- 第 4 月：MoE 推理与 EP / DeepEP。
-- 第 5 月：PD 分离和在线服务架构。
-- 第 6 月：TensorRT-LLM 和编译优化。
-- 第 7 月：国产 GPU 部署适配。
-- 第 8 月：Triton / CUDA Kernel 基础。
+- 第 1 月（7 月）：vLLM 请求生命周期和 Scheduler。← 当前
+- 第 2 月（8 月）：KV Cache 管理和长上下文。
+- 第 3 月（9 月）：SGLang Runtime 和结构化生成。
+- 第 4 月（10 月）：MoE 推理与 EP / DeepEP。
+- 第 5 月（11 月）：PD 分离和在线服务架构。
+- 第 6 月（12 月）：TensorRT-LLM 和编译优化。
+- 第 7 月（1 月）：国产 GPU 部署适配。
+- 第 8 月（2 月）：Triton / CUDA Kernel 基础。
 
 ## 能力成长刻度
 
@@ -158,7 +199,9 @@
 
 ## 近期 90 天路线
 
-### 第 1 到 30 天：打牢当前工作闭环
+起始日期：2026-07-01。
+
+### 第 1 到 30 天（07-01 至 07-30）：打牢当前工作闭环
 
 目标：
 
@@ -172,7 +215,7 @@
 - 一份 Benchmark 指标表。
 - 一篇“如何判断推理瓶颈”的笔记。
 
-### 第 31 到 60 天：建立系统地图
+### 第 31 到 60 天（07-31 至 08-29）：建立系统地图
 
 目标：
 
@@ -186,7 +229,7 @@
 - 两篇源码阅读笔记。
 - 一篇 KV Cache 或 Scheduler 主题文章。
 
-### 第 61 到 90 天：做第一个可复现实验
+### 第 61 到 90 天（08-30 至 09-28）：做第一个可复现实验
 
 目标：
 
