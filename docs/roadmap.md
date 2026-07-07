@@ -1,6 +1,39 @@
 # 长期路线图
 
-这条路线的目标不是成为一个只会部署 vLLM 的工程师，而是成长为 AI Inference System Engineer，并逐步走向 AI Infra Architect。
+这条路线的目标不是成为一个只会部署 vLLM 的工程师，而是成长为 AI Inference System / Agent System Engineer，并逐步走向 AI Infra Architect。
+
+## 当前主线判断
+
+下一阶段不再以“横向补更多技能”为主，而是围绕推理系统和 Agent 系统建立更深的系统能力。
+
+已经具备的基础包括：vLLM、SGLang、多机部署、PD 分离、国产卡适配、推理优化和问题排查。它们足够支撑下一阶段的成长。现在最重要的不是继续扩展工具菜单，而是把真实工程经验抽象成系统认知。
+
+### 最高优先级能力
+
+1. **系统建模能力**：从单点问题继续追问“它属于哪一类问题”，并放入请求模式、调度策略、KV Cache、显存、通信、GPU 利用率、吞吐和 TTFT 的因果网络。
+2. **提出问题的能力**：不满足于修复一个 Bug，而是追问它为什么反复出现、暴露了什么架构缺陷、别人是否还会踩、能否抽象成更一般的规律。
+3. **Agent System 视角**：研究 Agent 负载对推理系统的新要求，包括长生命周期 Session、Memory、Tool Calling、多 Agent、状态恢复、Checkpoint、Scheduling、资源隔离、Cost 和 Reliability。
+4. **公开输出能力**：把经验沉淀成别人可以复用的知识，固定采用“问题 → 原因 → 原理 → 排查 → 最佳实践”的结构。
+5. **产品思维**：先理解企业、业务和用户为什么需要 PD、Prefix Cache、Disaggregation、Long Context 等能力，再反推系统设计。
+
+### 暂时降低优先级
+
+以下能力不是放弃，而是不作为未来一年的主线投入：
+
+- Rust 新语法。
+- C++ 新标准。
+- 大量新的 Agent Framework。
+- 各类 Prompt 技巧。
+
+这些更新很快，且 AI 能提供较多辅助。未来五年的核心竞争力，应该是持续从真实工程中发现问题、抽象结构、形成系统认知，并把认知沉淀为可复用工程能力。
+
+### 三个长期追问
+
+每次技术学习、问题排查和实验复盘，都要带着三个问题：
+
+1. 这个现象背后的结构是什么？
+2. 这一类问题还能统一解释哪些现象？
+3. 如果未来 Agent 成为默认负载，这个结构还成立吗？
 
 ## 第一阶段：成为优秀的推理工程师
 
@@ -13,6 +46,13 @@
 把日常推理工作从“能跑起来”提升到“能解释、能优化、能排障、能复现、能比较”。
 
 ### 能力清单
+
+系统建模：
+
+- 能把单点问题放入完整链路，而不是停留在局部修复。
+- 能建立“请求模式 → 调度策略 → KV Cache → 显存 → 通信 → GPU 利用率 → 吞吐 → TTFT / TPOT”的因果图。
+- 能判断一个问题主要属于 Scheduler、KV Cache、Communication、Runtime、Hardware 还是业务负载。
+- 能从一个真实 Case 抽象出一类可复用的问题模型。
 
 模型部署：
 
@@ -39,6 +79,9 @@
 - SP
 - CP
 - DCP
+- PD Disaggregation
+- KV-aware Routing
+- Topology-aware Scheduling
 
 每一种并行方式都要回答：
 
@@ -47,6 +90,15 @@
 - 为什么不用？
 - 它牺牲了什么？
 - 它依赖什么硬件和网络条件？
+
+在线推理调度：
+
+- 如何提高 GPU 利用率和 TPM。
+- 如何在 SLO 条件下提高 KV Cache 命中。
+- 如何做 Prefill / Decode 分离调度。
+- 如何提前预判 worker 释放时间。
+- 如何处理 PD 容错。
+- 如何结合 NVLink、PCIe、IB/RDMA 做拓扑亲和。
 
 模型理解：
 
@@ -70,6 +122,7 @@
 - 一份常用推理框架部署和排障手册。
 - 一套标准 Benchmark 流程。
 - 一份分布式推理并行策略对照表。
+- 一张“请求模式到 SLO 指标”的推理系统因果图。
 - 至少 3 篇模型部署瓶颈分析笔记。
 
 ## 第二阶段：建立自己的推理知识体系
@@ -109,6 +162,8 @@ Hardware
 - FlashInfer：Kernel。
 - Mooncake：KV Cache。
 - LMCache：KV Cache / Cache Offloading。
+- HiCache：KV Cache / Hierarchical Cache。
+- KV Router：Scheduler / KV Cache / Deployment。
 - TileRT：Compiler。
 - vLLM：Runtime Engine / Scheduler。
 - SGLang：Runtime Engine / Programming Interface / Scheduler。
@@ -117,9 +172,39 @@ Hardware
 ### 阶段产出
 
 - 一张稳定维护的推理系统知识地图。
+- 一份高频工程问题分类法：KV Cache、Scheduler、PD、RDMA、NCCL、NUMA、Prefill、Decode 等。
 - 一套论文阅读分类模板。
 - 一份推理技术名词索引。
 - 每月至少 2 篇系统化调研笔记。
+
+## 第二阶段补充：建立 Agent System 视角
+
+时间：贯穿第二阶段到第四阶段。
+
+关键词：把 Agent 作为未来默认负载来审视推理系统。
+
+### 核心问题
+
+不要只问“如何写 Agent”，而要问：
+
+```text
+如果同时跑一万个长生命周期 Agent，现在的推理框架哪里会坏？
+```
+
+### 重点观察对象
+
+- 长生命周期 Session 如何改变 KV Cache、Prefix Cache 和调度策略。
+- Memory 与 Tool Calling 如何改变请求模式和状态管理。
+- 多 Agent 协作如何改变并发、隔离、可靠性和成本模型。
+- 状态恢复、Checkpoint 和失败重试如何进入推理 runtime。
+- Agent 负载下的 Scheduling 是否仍然能按传统 Prefill / Decode 方式优化。
+- 资源隔离、租户隔离和成本控制如何影响系统设计。
+
+### 阶段产出
+
+- 一份 Agent 负载画像：请求长度、会话时长、工具调用频率、状态大小、失败模式。
+- 一篇“Agent 对推理系统提出哪些新需求”的系统化笔记。
+- 至少 2 个面向 Agent 负载的 Benchmark 场景设计。
 
 ## 第三阶段：深入源码，形成系统能力
 
@@ -197,7 +282,11 @@ Hardware
 
 - DeepEP 实验。
 - PD 分离实验。
+- PD 调度和容错实验。
+- KV Router 实验。
 - KV Cache 实验。
+- HiCache / LMCache / Mooncake 对比实验。
+- Context Parallel 长上下文实验。
 - 国产卡实验。
 - 多机多卡稳定性实验。
 
@@ -206,6 +295,16 @@ Benchmark 工具：
 - 自动比较 vLLM、SGLang、TensorRT-LLM。
 - 支持 Prefill、Decode、混合负载和长上下文场景。
 - 支持吞吐、延迟、显存、GPU 利用率和网络指标采集。
+- 支持 SLO 条件下的 TPM、TTFT、TPOT、KV Cache 命中率和 miss penalty 分析。
+- 支持 PD 分离场景下的 KV 传输时间、worker 空转时间、拓扑亲和收益分析。
+- 支持 Agent 负载场景：长 Session、多轮工具调用、状态恢复、资源隔离和成本统计。
+
+产品化问题研究：
+
+- 企业为什么需要 PD 分离，而不是继续堆单体推理实例。
+- 用户为什么需要 Long Context、Prefix Cache 和 Disaggregation。
+- 不同行业负载对 TTFT、TPOT、成本、可靠性和隔离性的真实优先级。
+- 技术能力如何转化成可购买、可运维、可解释的产品能力。
 
 国产卡适配记录：
 
@@ -246,6 +345,7 @@ Benchmark 工具：
 - 国产卡适配。
 - 源码分析。
 - 行业动态和工程判断。
+- 一个产品需求反推系统设计的案例。
 
 目标不是追热点，而是形成连续的判断能力。坚持两年后，别人会开始引用这套内容。
 
@@ -273,3 +373,5 @@ Benchmark 工具：
 ## 总体判断标准
 
 三到五年后，真正重要的不是熟悉某一个框架，而是拥有一套能迁移到任何新模型、新硬件、新框架上的推理系统能力。
+
+更具体地说，目标不是“会更多技术”，而是当别人想到 KV Cache、PD、Agent 负载下的推理调度、多机通信或国产卡适配时，会想到你建立过一套清晰、可验证、可复用的理解。

@@ -28,7 +28,8 @@
         |             |             |
     KV Cache      Parallel    Communication
         |             |             |
-     LMCache      TP/EP/PP    NCCL/DeepEP
+ HiCache/LMCache  TP/EP/PP/CP NCCL/DeepEP
+ Mooncake/KV Router       PD KV Transfer
                       |
                 Runtime Engine
           vLLM / SGLang / TRT-LLM
@@ -49,6 +50,7 @@
 - Attention、MLP、MoE Router、Expert 计算分别占多少？
 - KV Cache 规模如何随上下文长度增长？
 - 新结构是否改变现有 Runtime 的调度假设？
+- 训练阶段的 tokenizer、checkpoint、并行切分和新结构实现是否会影响推理部署？
 
 主要类别：
 
@@ -57,6 +59,8 @@
 - MLA。
 - Linear Attention。
 - Hybrid Architecture。
+- Training Artifact：checkpoint、tokenizer、config、chat template、generation config。
+- Adapter / LoRA：base model、adapter 权重、rank、tenant/task 绑定关系。
 
 锚点案例：
 
@@ -88,16 +92,22 @@
 关注问题：
 
 - KV Cache 如何分配？
-- 如何分页、复用、压缩、迁移或卸载？
+- 如何分页、复用、压缩、迁移、卸载或跨实例共享？
 - 长上下文和高并发下显存压力如何变化？
 - Prefill 和 Decode 是否需要不同缓存策略？
 - PD 分离后 KV Cache 如何跨节点管理？
+- 如何在满足 SLO 的条件下提高 KV Cache 命中？
+- KV Router 如何在缓存命中、排队延迟和 GPU 利用率之间权衡？
+- LoRA / adapter cache 如何与 KV Cache、显存和路由共同影响 SLO？
 
 技术归类：
 
 - PagedAttention：KV Cache 分页管理。
 - LMCache：KV Cache 复用和卸载。
 - Mooncake：KV Cache / 分布式缓存相关方向。
+- HiCache：层次化 KV Cache / 缓存卸载方向。
+- KV Router：缓存感知请求路由。
+- Adapter Cache：LoRA adapter 的 GPU/CPU/SSD 缓存。
 
 锚点案例：
 
@@ -112,6 +122,8 @@
 - 哪些并行方式会增加延迟？
 - 哪些并行方式依赖高带宽网络？
 - 多种并行方式组合时，瓶颈转移到哪里？
+- 一组并发中哪些并行可以组合，哪些组合受模型结构、拓扑、SLO 和框架支持限制？
+- 组合后 world size、通信频率、KV Cache 复制和请求路由如何变化？
 
 并行方式：
 
@@ -120,8 +132,17 @@
 - EP：Expert Parallel。
 - PP：Pipeline Parallel。
 - SP：Sequence Parallel。
-- CP：Context Parallel。
+- CP：Context Parallel，长上下文下按上下文或序列维度拆分 Attention / KV 相关压力。
 - DCP：Decode Context Parallel 或相关变体，需要结合具体框架定义。
+
+组合策略：
+
+- DP + TP：最常见，外层多副本扩吞吐，副本内 TP 承载大模型。
+- TP + PP：超大 Dense 模型跨节点常见，通常节点内 TP、节点间 PP。
+- TP + EP：MoE 模型常见，Dense 模型无意义。
+- TP + CP / DCP：长上下文场景用于缓解 KV Cache 和 Attention 压力。
+- DP + TP + PP：超大模型在线服务的经典多副本结构。
+- DP + TP + EP：MoE serving 常见，但 DP 可能不再是完全独立副本。
 
 锚点案例：
 
@@ -136,6 +157,7 @@
 - 网络带宽、延迟、拓扑和拥塞如何影响性能？
 - MoE 的 Expert Dispatch 是否成为瓶颈？
 - 跨节点场景下是否需要 RDMA、NVSHMEM 或专用通信库？
+- 多机训练中的 NCCL / RDMA / 拓扑问题，和推理多卡通信问题有什么共通点？
 
 技术归类：
 
@@ -143,6 +165,7 @@
 - NVSHMEM：GPU 侧共享内存通信模型。
 - RDMA：低延迟网络能力。
 - DeepEP：MoE Expert Parallel 通信优化。
+- Distributed Training Communication：DDP / FSDP / ZeRO / Megatron TP-PP-EP。
 
 锚点案例：
 
@@ -159,6 +182,12 @@
 - Kernel 如何被调用？
 - 分布式并行如何组织？
 - 失败、超时、回收和限流如何处理？
+- 针对特定模型，哪些部分应该用 vLLM 原生实现，哪些部分需要自定义 model adapter、custom op、attention backend 或 scheduler？
+- 自定义实现是否真的提升 SLO goodput，还是只转移了瓶颈？
+- 论文新特性如何进入 SGLang / vLLM runtime，并以自定义镜像形式完成实验和部署？
+- 出现推理失败、hang、OOM、输出异常或性能退化时，如何快速定位到请求、调度、KV、模型、kernel、通信或基础设施层？
+- 训练产物交付到推理时，如何检查 checkpoint、tokenizer、config、chat template、量化配置和自定义模型代码？
+- 多 LoRA serving 时，如何支持 adapter 生命周期、multi-adapter batching、adapter cache 和动态加载？
 
 技术归类：
 
@@ -166,6 +195,16 @@
 - SGLang：面向结构化生成和高性能推理的 Runtime。
 - TensorRT-LLM：偏编译和深度优化的 NVIDIA 推理栈。
 - LMDeploy：模型部署和推理工具链。
+- Custom Model Implementation。
+- CustomOp。
+- Attention Backend。
+- Model-specific KV / Scheduler Optimization。
+- Runtime Feature Integration。
+- Custom Serving Image。
+- Failure Troubleshooting。
+- Observability / Incident Response。
+- Training-to-Serving Artifact Validation。
+- LoRA / Multi-LoRA Serving。
 
 锚点案例：
 
@@ -177,20 +216,42 @@
 
 - 请求级、token 级和实例级调度如何协同？
 - Prefill 和 Decode 是否分离？
+- Speculative Decoding / MTP 如何改变 Decode step、batch shape 和 TPOT？
+- PD 分离后 Prefill worker 和 Decode worker 如何配比？
+- 能否提前预判 Decode worker 什么时候结束，减少排队和 GPU 空转？
+- KV Cache 传输成本如何进入调度决策？
+- KV Router 如何在 SLO 内提高缓存命中？
+- LoRA Router 如何在 adapter hit、worker queue、adapter load cost、tenant isolation 和 SLO 之间权衡？
+- PD 容错时，Prefill、Decode 或 KV 传输失败如何恢复？
+- PD 调度是否要考虑 NVLink、PCIe、IB/RDMA、跨机和跨 rack 拓扑亲和？
 - Autoscaling 指标是什么？
 - 多租户如何隔离？
 - 如何处理流量突刺、长尾请求和优先级？
+- 如何处理不规则超长上下文和短请求混合，避免短请求 P99 被污染？
+- 并发不高但延迟很大时，如何区分 tokenizer、prefill、KV Cache、HBM bandwidth、scheduler gap 和通信问题？
+- 推理异常失败时如何止血、保留证据、最小复现和复盘？
 - Benchmark 结果如何转化为线上容量规划？
+- 如何根据现有 GPU、模型结构、业务 workload 和 SLO 选择最优部署拓扑？
+- 如何通过参数调优提高 SLO 约束下的 goodput，而不是只追求裸吞吐？
+- 如何提高 GPU 利用率和 TPM，同时不破坏 SLO？
 
 技术归类：
 
 - Continuous Batching。
 - Chunked Prefill。
 - Speculative Decoding。
+- MTP。
+- DSpark / DeepSpec。
 - PD Disaggregation。
+- PD Scheduling。
+- KV-aware Routing。
+- Topology-aware Scheduling。
+- Fault-tolerant PD Serving。
 - Kubernetes。
 - Autoscaling。
 - Load Balancing。
+- SLO-aware Goodput Optimization。
+- Capacity Planning。
 
 锚点案例：
 
